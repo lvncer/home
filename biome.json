@@ -16,6 +16,7 @@
       "next.config.ts",
       "postcss.config.mjs",
       "biome.json",
+      ".husky/pre-commit",
       "src/**/*.css",
       "src/**/*.ts",
       "src/**/*.tsx"
