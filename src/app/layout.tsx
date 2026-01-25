@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Share_Tech } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const shareTech = Share_Tech({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-inter",
+  weight: ["400"],
+  variable: "--font-share-tech",
 });
 
 export const metadata: Metadata = {
@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+      <body className={`${shareTech.className} antialiased`}>{children}</body>
     </html>
   );
 }

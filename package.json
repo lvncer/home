@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "start": "next start",
+    "dev": "next dev",
     "build": "next build",
     "lint": "biome lint",
     "format": "biome format --write",
@@ -14,6 +15,7 @@
     "*": "biome format --write"
   },
   "dependencies": {
+    "lucide-react": "^0.563.0",
     "next": "^16.1.4",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
