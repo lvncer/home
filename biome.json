@@ -10,7 +10,6 @@
   },
   "files": {
     "includes": [
-      ".gitignore",
       "package.json",
       "tsconfig.json",
       "next.config.ts",
