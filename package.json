@@ -2,7 +2,7 @@
   "name": "home",
   "version": "0.1.0",
   "private": true,
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/bootstrap.js",
   "scripts": {
     "start": "next start",
     "dev": "next dev",
@@ -32,9 +32,13 @@
       "public/**",
       "node_modules/**",
       "package.json",
+      "next.config.mjs",
       "next.config.ts"
     ],
     "mac": {
+      "signIgnore": [
+        ".*MediaRemoteAdapter\\.framework.*"
+      ],
       "target": [
         "dmg",
         "zip"

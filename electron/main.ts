@@ -1,5 +1,8 @@
 import { BrowserWindow, app, ipcMain } from "electron";
 import * as path from "node:path";
+import * as fs from "node:fs";
+import * as net from "node:net";
+import * as http from "node:http";
 
 import {
   getNowPlayingOnce,
@@ -13,6 +16,37 @@ import type {
 
 const NEXT_DEV_URL = process.env.NEXT_DEV_URL ?? "http://localhost:3000";
 const PROD_NEXT_PORT = Number(process.env.NEXT_PORT ?? "37111");
+
+const FALLBACK_LOG_PATH = "/tmp/home-electron-main.log";
+
+// 最初の一撃（app.whenReady前でも確認できるように）
+try {
+  fs.appendFileSync(
+    FALLBACK_LOG_PATH,
+    `${new Date().toISOString()} moduleLoaded\n`,
+  );
+} catch {
+  // ignore
+}
+
+function appendLog(line: string) {
+  try {
+    const logPath = path.join(app.getPath("userData"), "main.log");
+    fs.appendFileSync(logPath, `${new Date().toISOString()} ${line}\n`);
+  } catch {
+    // ignore
+  }
+
+  // app.getPath が使えない/失敗した場合でも追えるように /tmp へも書く
+  try {
+    fs.appendFileSync(
+      FALLBACK_LOG_PATH,
+      `${new Date().toISOString()} ${line}\n`,
+    );
+  } catch {
+    // ignore
+  }
+}
 
 function getAppRoot() {
   // dev: dist-electron/ -> repo root
@@ -110,6 +144,26 @@ async function ensureStreamRunning() {
   }
 }
 
+function canConnect(
+  host: string,
+  port: number,
+  timeoutMs = 800,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection(port, host);
+    const done = (ok: boolean) => {
+      socket.removeAllListeners();
+      socket.end();
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.on("connect", () => done(true));
+    socket.on("timeout", () => done(false));
+    socket.on("error", () => done(false));
+  });
+}
+
 async function createWindow() {
   const preloadPath = path.join(__dirname, "preload.js");
 
@@ -123,38 +177,37 @@ async function createWindow() {
     },
   });
 
-  if (!app.isPackaged) {
+  mainWindow.webContents.on("did-fail-load", (_e, code, desc, url) => {
+    appendLog(`did-fail-load code=${code} desc=${desc} url=${url}`);
+  });
+
+  // 「dev serverが生きている時だけdev URLを開く」。
+  // packagedなのに isPackaged/defaultApp 判定がブレても白画面にならないようにする。
+  const allowDevUrl =
+    process.defaultApp || process.env.ELECTRON_FORCE_DEV === "1";
+  let devUrlReachable = false;
+  if (allowDevUrl) {
+    try {
+      const u = new URL(NEXT_DEV_URL);
+      const port = u.port ? Number(u.port) : u.protocol === "https:" ? 443 : 80;
+      devUrlReachable = await canConnect(u.hostname, port);
+    } catch {
+      devUrlReachable = false;
+    }
+  }
+
+  appendLog(
+    `startup allowDevUrl=${allowDevUrl} devUrlReachable=${devUrlReachable} NEXT_DEV_URL=${NEXT_DEV_URL}`,
+  );
+
+  if (allowDevUrl && devUrlReachable) {
     await mainWindow.loadURL(NEXT_DEV_URL);
     return;
   }
 
-  // 本番: Nextサーバを立てて開く（.appに .next/ と node_modules が含まれる想定）
-  // NOTE: 初期実装は「動くこと優先」。配布時に必要なら改善する。
-  const { spawn } = await import("node:child_process");
-  const net = await import("node:net");
-
   const appRoot = getAppRoot();
-  const nextBin = path.join(
-    appRoot,
-    "node_modules",
-    "next",
-    "dist",
-    "bin",
-    "next",
-  );
-
-  const proc = spawn(
-    process.execPath,
-    [nextBin, "start", "-p", String(PROD_NEXT_PORT)],
-    {
-      cwd: appRoot,
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: "1",
-        NODE_ENV: "production",
-      },
-      stdio: "pipe",
-    },
+  appendLog(
+    `starting in-process Next server dir=${appRoot} port=${PROD_NEXT_PORT}`,
   );
 
   // wait port open
@@ -171,12 +224,68 @@ async function createWindow() {
       tryOnce();
     });
 
-  await waitPort();
+  // 本番: Electron内のNodeでNextサーバを同一プロセスで起動する。
+  // Electronの fuses 設定等で ELECTRON_RUN_AS_NODE が使えない環境でも動く。
+  try {
+    const mod = (await import("next")) as unknown as {
+      default?: (opts: Record<string, unknown>) => {
+        prepare: () => Promise<void>;
+        getRequestHandler: () => (
+          req: http.IncomingMessage,
+          res: http.ServerResponse,
+        ) => void;
+      };
+    };
+    const nextFactory = mod.default;
+    if (!nextFactory) throw new Error("Failed to import next()");
+
+    const nextApp = nextFactory({
+      dev: false,
+      dir: appRoot,
+      hostname: "127.0.0.1",
+      port: PROD_NEXT_PORT,
+    });
+    await nextApp.prepare();
+
+    const handle = nextApp.getRequestHandler();
+    http
+      .createServer((req, res) => handle(req, res))
+      .listen(PROD_NEXT_PORT, "127.0.0.1");
+  } catch (e) {
+    appendLog(`failed to start Next server: ${String(e)}`);
+    const logPath = path.join(app.getPath("userData"), "main.log");
+    await mainWindow?.loadURL(
+      `data:text/plain,Failed to start Next server.%0A%0A${encodeURIComponent(
+        String(e),
+      )}%0A%0ASee log:%0A${encodeURIComponent(logPath)}`,
+    );
+    throw e;
+  }
+
+  // 10秒待っても開かないなら、ログ場所を表示して止める
+  await Promise.race([
+    waitPort(),
+    new Promise<void>((_resolve, reject) =>
+      setTimeout(
+        () => reject(new Error("Next server did not open port in time")),
+        10_000,
+      ),
+    ),
+  ]).catch(async (e) => {
+    const logPath = path.join(app.getPath("userData"), "main.log");
+    await mainWindow?.loadURL(
+      `data:text/plain,Failed to open port.%0A%0A${encodeURIComponent(
+        String(e),
+      )}%0A%0ASee log:%0A${encodeURIComponent(logPath)}`,
+    );
+    throw e;
+  });
 
   await mainWindow.loadURL(`http://127.0.0.1:${PROD_NEXT_PORT}`);
 }
 
 app.whenReady().then(async () => {
+  appendLog(`whenReady packaged=${app.isPackaged} appPath=${app.getAppPath()}`);
   ipcMain.on("nowPlaying:subscribe", async (event) => {
     subscribers.add(event.sender.id);
     event.sender.send("nowPlaying:update", currentState);
