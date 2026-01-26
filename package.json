@@ -2,14 +2,48 @@
   "name": "home",
   "version": "0.1.0",
   "private": true,
+  "main": "dist-electron/bootstrap.js",
   "scripts": {
     "start": "next start",
     "dev": "next dev",
     "build": "next build",
+    "dev:web": "next dev",
+    "dev:electron": "concurrently -k \"npm run dev:web\" \"wait-on http://localhost:3000 && npm run electron:build && electron .\"",
+    "electron:build": "tsc -p electron/tsconfig.json",
+    "electron:start": "electron .",
+    "build:web": "next build",
+    "build:electron": "bun run build:web && bun run electron:build && electron-builder --publish=never",
     "lint": "biome lint",
     "format": "biome format --write",
     "check": "biome check",
     "prepare": "husky"
+  },
+  "build": {
+    "appId": "com.lvncer.home",
+    "productName": "home",
+    "asar": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "dist-electron/**",
+      "electron/**",
+      ".next/**",
+      "public/**",
+      "node_modules/**",
+      "package.json",
+      "next.config.mjs",
+      "next.config.ts"
+    ],
+    "mac": {
+      "signIgnore": [
+        ".*MediaRemoteAdapter\\.framework.*"
+      ],
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
   },
   "lint-staged": {
     "*": "biome format --write"
@@ -26,9 +60,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9",
+    "electron": "^37",
+    "electron-builder": "^26",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^8"
   }
 }

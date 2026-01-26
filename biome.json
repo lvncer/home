@@ -13,12 +13,18 @@
       "package.json",
       "tsconfig.json",
       "next.config.ts",
+      "next.config.mjs",
       "postcss.config.mjs",
       "biome.json",
       ".husky/pre-commit",
+      "documents/*.md",
       "src/**/*.css",
       "src/**/*.ts",
-      "src/**/*.tsx"
+      "src/**/*.tsx",
+      "electron/*.ts",
+      "electron/*.json",
+      "electron/**/*.pl",
+      "electron/**/*.ts"
     ]
   },
   "javascript": {
