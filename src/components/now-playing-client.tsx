@@ -9,6 +9,7 @@ type NowPlayingState =
       kind: "playing";
       title: string;
       subtitle?: string;
+      isPlaying: boolean;
       stop: () => void;
     };
 
@@ -46,6 +47,8 @@ function getActiveMediaElement(): HTMLMediaElement | null {
 export default function NowPlayingClient() {
   const [state, setState] = useState<NowPlayingState>({ kind: "idle" });
 
+  const isDesktop = typeof window !== "undefined" && !!window.nowPlaying;
+
   const refresh = useCallback(() => {
     const media = getActiveMediaElement();
     if (!media) {
@@ -74,11 +77,41 @@ export default function NowPlayingClient() {
       kind: "playing",
       title: fromSession.title || fallbackTitle,
       subtitle: fromSession.subtitle,
+      isPlaying: true,
       stop,
     });
   }, []);
 
   useEffect(() => {
+    if (isDesktop && window.nowPlaying) {
+      const unsubscribe = window.nowPlaying.subscribe((payload) => {
+        const title = payload?.title?.trim();
+        const artist = payload?.artist?.trim();
+        const album = payload?.album?.trim();
+        const subtitle = [artist, album].filter(Boolean).join(" • ");
+        const playing = payload?.playing ?? false;
+
+        if (!title) {
+          setState({ kind: "idle" });
+          return;
+        }
+
+        const stop = () => {
+          void window.nowPlaying?.pause();
+        };
+
+        setState({
+          kind: "playing",
+          title,
+          subtitle: subtitle || undefined,
+          isPlaying: !!playing,
+          stop,
+        });
+      });
+
+      return () => unsubscribe();
+    }
+
     refresh();
 
     const onChange = () => refresh();
@@ -91,7 +124,7 @@ export default function NowPlayingClient() {
       document.removeEventListener("pause", onChange, true);
       document.removeEventListener("ended", onChange, true);
     };
-  }, [refresh]);
+  }, [isDesktop, refresh]);
 
   const content = useMemo(() => {
     if (state.kind === "idle") {
@@ -109,6 +142,9 @@ export default function NowPlayingClient() {
             Now Playing
           </div>
           <div className="truncate text-base font-semibold">{state.title}</div>
+          {!state.isPlaying ? (
+            <div className="truncate text-sm text-black/50">Paused</div>
+          ) : null}
           {state.subtitle ? (
             <div className="truncate text-sm text-black/60">
               {state.subtitle}

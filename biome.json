@@ -18,7 +18,11 @@
       ".husky/pre-commit",
       "src/**/*.css",
       "src/**/*.ts",
-      "src/**/*.tsx"
+      "src/**/*.tsx",
+      "electron/*.ts",
+      "electron/*.json",
+      "electron/**/*.pl",
+      "electron/**/*.ts"
     ]
   },
   "javascript": {
