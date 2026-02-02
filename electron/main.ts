@@ -17,35 +17,9 @@ import type {
 const NEXT_DEV_URL = process.env.NEXT_DEV_URL ?? "http://localhost:3000";
 const PROD_NEXT_PORT = Number(process.env.NEXT_PORT ?? "37111");
 
-const FALLBACK_LOG_PATH = "/tmp/home-electron-main.log";
-
-// 最初の一撃（app.whenReady前でも確認できるように）
-try {
-  fs.appendFileSync(
-    FALLBACK_LOG_PATH,
-    `${new Date().toISOString()} moduleLoaded\n`,
-  );
-} catch {
-  // ignore
-}
-
 function appendLog(line: string) {
-  try {
-    const logPath = path.join(app.getPath("userData"), "main.log");
-    fs.appendFileSync(logPath, `${new Date().toISOString()} ${line}\n`);
-  } catch {
-    // ignore
-  }
-
-  // app.getPath が使えない/失敗した場合でも追えるように /tmp へも書く
-  try {
-    fs.appendFileSync(
-      FALLBACK_LOG_PATH,
-      `${new Date().toISOString()} ${line}\n`,
-    );
-  } catch {
-    // ignore
-  }
+  const logPath = path.join(app.getPath("userData"), "main.log");
+  fs.appendFileSync(logPath, `${new Date().toISOString()} ${line}\n`);
 }
 
 function getAppRoot() {
@@ -104,14 +78,9 @@ async function ensureStreamRunning() {
 
   const appRoot = getAppRoot();
 
-  // 初期状態を一度流す（失敗したらstreamだけ試す）
-  try {
-    const once = await getNowPlayingOnce(appRoot);
-    currentState = toSlim(once);
-    broadcast(currentState);
-  } catch {
-    // ignore
-  }
+  const once = await getNowPlayingOnce(appRoot);
+  currentState = toSlim(once);
+  broadcast(currentState);
 
   try {
     let lastFull: NowPlayingInfo = {};
@@ -181,7 +150,7 @@ async function createWindow() {
     appendLog(`did-fail-load code=${code} desc=${desc} url=${url}`);
   });
 
-  // 「dev serverが生きている時だけdev URLを開く」。
+  // dev serverが生きている時だけdev URLを開く
   // packagedなのに isPackaged/defaultApp 判定がブレても白画面にならないようにする。
   const allowDevUrl =
     process.defaultApp || process.env.ELECTRON_FORCE_DEV === "1";
