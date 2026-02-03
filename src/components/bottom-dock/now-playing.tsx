@@ -44,7 +44,7 @@ function getActiveMediaElement(): HTMLMediaElement | null {
   return nodes.find((m) => !m.paused && !m.ended) ?? null;
 }
 
-export default function NowPlayingClient() {
+export default function NowPlaying() {
   const [state, setState] = useState<NowPlayingState>({ kind: "idle" });
 
   const isDesktop = typeof window !== "undefined" && !!window.nowPlaying;

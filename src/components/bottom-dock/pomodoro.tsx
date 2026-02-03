@@ -130,7 +130,7 @@ function TimerCard({ title, defaultDurationMs }: TimerCardProps) {
   );
 }
 
-export default function PomodoroClient() {
+export default function Pomodoro() {
   return (
     <div className="w-full max-w-2xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">

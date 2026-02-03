@@ -1,10 +1,17 @@
-import Time from "@/components/time";
-import Pomodoro from "@/components/pomodoro";
-import BottomDock from "@/components/bottom-dock";
-import NowPlaying from "@/components/now-playing";
+import BackgroundImage from "@/components/background-image";
+import BottomDock from "@/components/bottom-dock/index";
+import Pomodoro from "@/components/bottom-dock/pomodoro";
+import Time from "@/components/bottom-dock/time";
+import NowPlaying from "@/components/bottom-dock/now-playing";
 
 export default function Home() {
   return (
-    <BottomDock left={<Pomodoro />} center={<Time />} right={<NowPlaying />} />
+    <BackgroundImage>
+      <BottomDock
+        left={<Pomodoro />}
+        center={<Time />}
+        right={<NowPlaying />}
+      />
+    </BackgroundImage>
   );
 }
