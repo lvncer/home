@@ -1,10 +1,14 @@
 "use client";
 
-import { Pause, Play, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Pause, Play } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const DEFAULT_POMODORO_MS = 25 * 60 * 1000;
-const DEFAULT_BREAK_MS = 5 * 60 * 1000;
+const FOCUS_MS = 25 * 60 * 1000;
+const BREAK_MS = 5 * 60 * 1000;
+const RING_RADIUS = 92;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+type Phase = "focus" | "break";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -17,14 +21,19 @@ function formatRemaining(ms: number) {
   return `${pad2(minutes)}:${pad2(seconds)}`;
 }
 
-type TimerCardProps = {
-  title: string;
-  defaultDurationMs: number;
-};
+function getDurationMs(phase: Phase) {
+  return phase === "focus" ? FOCUS_MS : BREAK_MS;
+}
 
-function TimerCard({ title, defaultDurationMs }: TimerCardProps) {
-  const [remainingMs, setRemainingMs] = useState(defaultDurationMs);
+function getPhaseLabel(phase: Phase) {
+  return phase === "focus" ? "作業" : "休憩";
+}
+
+export default function Pomodoro() {
+  const [phase, setPhase] = useState<Phase>("focus");
+  const [remainingMs, setRemainingMs] = useState(FOCUS_MS);
   const [isRunning, setIsRunning] = useState(false);
+  const [completedFocusCount, setCompletedFocusCount] = useState(0);
 
   const endAtRef = useRef<number | null>(null);
 
@@ -32,6 +41,13 @@ function TimerCard({ title, defaultDurationMs }: TimerCardProps) {
     () => formatRemaining(remainingMs),
     [remainingMs],
   );
+  const phaseDurationMs = useMemo(() => getDurationMs(phase), [phase]);
+  const remainingRatio = Math.max(
+    0,
+    Math.min(1, remainingMs / phaseDurationMs),
+  );
+  const strokeOffset = RING_CIRCUMFERENCE * (1 - remainingRatio);
+  const isFocus = phase === "focus";
 
   useEffect(() => {
     if (!isRunning) return;
@@ -47,12 +63,17 @@ function TimerCard({ title, defaultDurationMs }: TimerCardProps) {
       setRemainingMs(nextRemaining);
 
       if (nextRemaining <= 0) {
-        endAtRef.current = null;
-        setIsRunning(false);
+        const nextPhase: Phase = phase === "focus" ? "break" : "focus";
+        const nextDuration = getDurationMs(nextPhase);
+        if (phase === "focus") {
+          setCompletedFocusCount((prev) => prev + 1);
+        }
+        setPhase(nextPhase);
+        setRemainingMs(nextDuration);
+        endAtRef.current = Date.now() + nextDuration;
         return;
       }
 
-      // 次の秒境界に寄せる
       timer = setTimeout(tick, 1000 - (now % 1000));
     };
 
@@ -61,81 +82,85 @@ function TimerCard({ title, defaultDurationMs }: TimerCardProps) {
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [isRunning]);
+  }, [isRunning, phase]);
 
-  const onPlay = () => {
+  const onStart = () => {
     if (isRunning) return;
-    if (remainingMs <= 0) return;
     endAtRef.current = Date.now() + remainingMs;
     setIsRunning(true);
   };
 
-  const onPause = () => {
+  const onPause = useCallback(() => {
     if (!isRunning) return;
     const endAt = endAtRef.current;
     const now = Date.now();
     if (endAt) setRemainingMs(Math.max(0, endAt - now));
     endAtRef.current = null;
     setIsRunning(false);
-  };
-
-  const onReset = () => {
-    endAtRef.current = null;
-    setIsRunning(false);
-    setRemainingMs(defaultDurationMs);
-  };
+  }, [isRunning]);
 
   const onToggle = () => {
     if (isRunning) onPause();
-    else onPlay();
+    else onStart();
   };
 
   return (
-    <div className="w-full">
-      <div className="rounded-2xl border border-black/10 bg-white/50 p-5 backdrop-blur">
-        <div className="text-sm font-medium tracking-wide text-black/70">
-          {title}
+    <div className="w-[260px] max-w-[82vw]">
+      <div className="rounded-3xl border border-white/20 bg-black/35 p-4 text-white backdrop-blur">
+        <div className="mb-3 flex items-center justify-between text-xs text-white/75">
+          <span>{getPhaseLabel(phase)}</span>
+          <span className="tabular-nums">ループ {completedFocusCount}</span>
         </div>
 
-        <div className="mt-2 text-5xl font-medium tabular-nums">
-          {remainingText}
+        <div className="relative mx-auto h-[220px] w-[220px]">
+          <svg className="h-full w-full -rotate-90" viewBox="0 0 220 220">
+            <circle
+              cx="110"
+              cy="110"
+              r={RING_RADIUS}
+              fill="none"
+              stroke="rgba(255,255,255,0.2)"
+              strokeWidth="12"
+            />
+            <circle
+              cx="110"
+              cy="110"
+              r={RING_RADIUS}
+              fill="none"
+              stroke={
+                isFocus ? "rgba(34,197,94,0.95)" : "rgba(59,130,246,0.95)"
+              }
+              strokeWidth="12"
+              strokeLinecap="round"
+              strokeDasharray={RING_CIRCUMFERENCE}
+              strokeDashoffset={strokeOffset}
+              className="transition-[stroke-dashoffset] duration-300"
+            />
+          </svg>
+
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div className="text-[42px] font-medium tabular-nums tracking-tight">
+              {remainingText}
+            </div>
+            <button
+              type="button"
+              onClick={onToggle}
+              className="mt-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-white text-black transition hover:bg-white/90 active:scale-[0.98]"
+              aria-label={isRunning ? "一時停止" : "開始"}
+              title={isRunning ? "一時停止" : "開始"}
+            >
+              {isRunning ? (
+                <Pause className="h-5 w-5" />
+              ) : (
+                <Play className="h-5 w-5 fill-current" />
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={onToggle}
-            disabled={!isRunning && remainingMs <= 0}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-black/10 bg-white shadow-sm transition hover:bg-black/5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label={isRunning ? "一時停止" : "開始"}
-          >
-            {isRunning ? (
-              <Pause className="h-5 w-5" />
-            ) : (
-              <Play className="h-5 w-5" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={onReset}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-black/10 bg-white shadow-sm transition hover:bg-black/5 active:scale-[0.98]"
-            aria-label="リセット"
-          >
-            <RotateCcw className="h-5 w-5" />
-          </button>
+        <div className="mt-2 text-center text-xs text-white/65">
+          {isFocus ? "25分集中" : "5分休憩"} を自動で切り替え
         </div>
-      </div>
-    </div>
-  );
-}
-
-export default function Pomodoro() {
-  return (
-    <div className="w-full max-w-2xl">
-      <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
-        <TimerCard title="Pomodoro" defaultDurationMs={DEFAULT_POMODORO_MS} />
-        <TimerCard title="Break" defaultDurationMs={DEFAULT_BREAK_MS} />
       </div>
     </div>
   );
