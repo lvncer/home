@@ -11,6 +11,9 @@ declare global {
             album?: string | null;
             playing?: boolean | null;
             bundleIdentifier?: string | null;
+            duration?: number | null;
+            elapsedTime?: number | null;
+            artworkUrl?: string | null;
           } | null,
         ) => void,
       ) => () => void;

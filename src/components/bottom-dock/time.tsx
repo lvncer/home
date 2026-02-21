@@ -1,4 +1,4 @@
-import TimeClient from "./time-client";
+import TimeClient from "@/components/bottom-dock/time-client";
 
 export default function Time() {
   const initialTimestamp = Date.now();

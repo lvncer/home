@@ -30,10 +30,16 @@ function getAppRoot() {
 
 let mainWindow: BrowserWindow | null = null;
 
-type SlimNowPlaying = Pick<
-  NowPlayingInfo,
-  "title" | "artist" | "album" | "playing" | "bundleIdentifier"
->;
+type SlimNowPlaying = {
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  playing: boolean | null;
+  bundleIdentifier: string | null;
+  duration: number | null;
+  elapsedTime: number | null;
+  artworkUrl: string | null;
+};
 
 let currentState: SlimNowPlaying | null = null;
 let stopStream: null | (() => void) = null;
@@ -62,6 +68,13 @@ function mergeDiff(prev: NowPlayingInfo, diff: NowPlayingInfo): NowPlayingInfo {
   return next;
 }
 
+function toArtworkDataUrl(info: NowPlayingInfo): string | null {
+  const artworkData = info.artworkData?.trim();
+  if (!artworkData) return null;
+  const mimeType = info.artworkMimeType?.trim() || "image/png";
+  return `data:${mimeType};base64,${artworkData}`;
+}
+
 function toSlim(info: NowPlayingInfo | null): SlimNowPlaying | null {
   if (!info) return null;
   return {
@@ -70,6 +83,9 @@ function toSlim(info: NowPlayingInfo | null): SlimNowPlaying | null {
     album: info.album ?? null,
     playing: info.playing ?? null,
     bundleIdentifier: info.bundleIdentifier ?? null,
+    duration: info.duration ?? null,
+    elapsedTime: info.elapsedTime ?? null,
+    artworkUrl: toArtworkDataUrl(info),
   };
 }
 
